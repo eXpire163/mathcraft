@@ -51,6 +51,69 @@ I could imagine that having only one melody might get boring pretty soon. can yo
 
 I found a bug, when running out of time i loose all lives at ones (or maybe one per frame, not really clear). i should only loose one live and see the normal incorrect feedback and then go to the next equastion
 
+promt 7
+
+ok the math game look better every day. i would like to replace the text on the waiting screnn as well as the gameover view with the graphis provided in the assests/fonds.png
+
+when generating the image i got some sample code for it. i add it here in case it helps
+
+let spriteSheet;
+let tileSize = 64;
+let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+let charImages = {};
+
+function preload() {
+// Load your sprite sheet (place the image file in your project folder)
+spriteSheet = loadImage("minecraft_font.png");
+}
+
+function setup() {
+createCanvas(800, 400);
+background(50);
+noSmooth();
+
+// Prepare each character as a cropped image
+for (let i = 0; i < chars.length; i++) {
+// Determine the position in the sprite sheet
+let x = (i % 9) * tileSize; // assuming 9 characters per row (adjust if different)
+let y = floor(i / 9) * tileSize;
+charImages[chars[i]] = spriteSheet.get(x, y, tileSize, tileSize);
+}
+}
+
+function draw() {
+background(60);
+
+// Example text to draw
+let textToDraw = "HELLO123";
+
+// Draw each character
+for (let i = 0; i < textToDraw.length; i++) {
+let c = textToDraw[i];
+let img = charImages[c];
+if (img) {
+image(img, 50 + i * tileSize, 150, tileSize, tileSize);
+}
+}
+}
+
+if you want to know more about the history of the game, have a look at the #file:math.md
+
+prompt 8
+
+ok i the positions of the text is completely off. could you add a debug screen where the sprite is shown with all rectagles of where it reads the letters from
+
+p9
+
+ok i ok i added the positions to the code. can you update the debug screen with the new information
+
+p10
+
+ok that looks better. now we need a spacing between all characters of lets say 5 px. the 2. thing is please use again the normal font again for the quations as its prettry hard to read right now
+
+p11
+
+ok, lets make it 10 pixel , make the display of all sprite based characaters 50% larger and let the game start also on tapping the screen on a tablet
 
 ## NEXT
 

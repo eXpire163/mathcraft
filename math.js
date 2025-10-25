@@ -1,5 +1,5 @@
 // ===== GAME STATE =====
-let gameState = 'waiting'; // 'waiting', 'playing', 'gameOver', 'feedback'
+let gameState = 'waiting'; // 'waiting', 'playing', 'gameOver', 'feedback', 'debug'
 let score = 0;
 let lives = 5;
 let currentEquation = {};
@@ -18,22 +18,86 @@ let envelope;
 let audioReady = false;
 
 // ===== MINECRAFT FONT =====
-let minecraftFont;
+let spriteSheet;
+let tileSize = 64;
+let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+let charImages = {};
+
+// ===== CALIBRATION SYSTEM =====
+let calibrationMode = false;
+let currentCharIndex = 0;
+let waitingForTopLeft = true;
+let charPositions = [
+    { char: 'A', x: 13, y: 0, w: 95, h: 110 },
+    { char: 'B', x: 125, y: 0, w: 88, h: 111 },
+    { char: 'C', x: 233, y: 0, w: 80, h: 109 },
+    { char: 'D', x: 328, y: 1, w: 89, h: 108 },
+    { char: 'E', x: 438, y: 0, w: 87, h: 109 },
+    { char: 'F', x: 536, y: 1, w: 85, h: 110 },
+    { char: 'G', x: 637, y: 0, w: 89, h: 111 },
+    { char: 'H', x: 741, y: 1, w: 92, h: 108 },
+    { char: 'I', x: 849, y: 0, w: 46, h: 109 },
+    { char: 'J', x: 15, y: 147, w: 80, h: 110 },
+    { char: 'K', x: 112, y: 147, w: 88, h: 110 },
+    { char: 'L', x: 216, y: 147, w: 81, h: 109 },
+    { char: 'M', x: 311, y: 145, w: 109, h: 113 },
+    { char: 'N', x: 433, y: 151, w: 101, h: 104 },
+    { char: 'O', x: 547, y: 148, w: 93, h: 111 },
+    { char: 'P', x: 653, y: 148, w: 86, h: 112 },
+    { char: 'Q', x: 752, y: 148, w: 91, h: 119 },
+    { char: 'R', x: 858, y: 147, w: 94, h: 111 },
+    { char: 'S', x: 13, y: 289, w: 88, h: 112 },
+    { char: 'T', x: 113, y: 289, w: 88, h: 110 },
+    { char: 'U', x: 317, y: 289, w: 92, h: 110 },
+    { char: 'V', x: 421, y: 290, w: 96, h: 109 },
+    { char: 'W', x: 533, y: 290, w: 108, h: 109 },
+    { char: 'X', x: 651, y: 290, w: 87, h: 109 },
+    { char: 'Y', x: 749, y: 289, w: 88, h: 110 },
+    { char: 'Z', x: 851, y: 289, w: 86, h: 112 },
+    { char: '0', x: 11, y: 426, w: 94, h: 115 },
+    { char: '1', x: 111, y: 424, w: 54, h: 113 },
+    { char: '2', x: 177, y: 429, w: 90, h: 109 },
+    { char: '3', x: 273, y: 423, w: 85, h: 114 },
+    { char: '4', x: 367, y: 426, w: 72, h: 112 },
+    { char: '5', x: 452, y: 425, w: 73, h: 110 },
+    { char: '6', x: 536, y: 428, w: 78, h: 109 },
+    { char: '7', x: 621, y: 424, w: 84, h: 116 },
+    { char: '8', x: 711, y: 424, w: 92, h: 116 },
+    { char: '9', x: 813, y: 425, w: 94, h: 112 }
+];
+let tempTopLeft = null;
+let displayScale = 2;
+let spriteX, spriteY;
 
 // ===== SETUP =====
 function setup() {
     createCanvas(windowWidth, windowHeight);
     textAlign(CENTER, CENTER);
     lastFrameTime = millis();
+    noSmooth(); // Keep pixelated look
+
+    // Prepare each character as a cropped image using precise positions
+    if (spriteSheet) {
+        for (let i = 0; i < chars.length; i++) {
+            if (i < charPositions.length) {
+                let pos = charPositions[i];
+                charImages[chars[i]] = spriteSheet.get(pos.x, pos.y, pos.w, pos.h);
+            } else {
+                // Fallback to old method if position not defined
+                let x = (i % 9) * tileSize;
+                let y = floor(i / 9) * tileSize;
+                charImages[chars[i]] = spriteSheet.get(x, y, tileSize, tileSize);
+            }
+        }
+    }
 
     // Initialize sound synthesizers for retro NES-style sounds
     setupSounds();
 }
 
 function preload() {
-    // TODO: Load Minecraft font when available
-    // minecraftFont = loadFont('assets/Minecraft.ttf');
-    // For now, we'll use a blocky system font
+    // Load the Minecraft font sprite sheet
+    spriteSheet = loadImage("assets/font2.png");
 }
 
 // ===== SOUND SETUP =====
@@ -155,6 +219,8 @@ function draw() {
         drawFeedback();
     } else if (gameState === 'gameOver') {
         drawGameOverScreen();
+    } else if (gameState === 'debug') {
+        drawDebugScreen();
     }
 }
 
@@ -190,39 +256,315 @@ function drawMinecraftBackground() {
 // ===== WAITING SCREEN =====
 function drawWaitingScreen() {
     // Title with Minecraft style
-    drawMinecraftText('MATH CRAFT', width / 2, height / 2 - 120, 72, color(255, 255, 100));
+    drawMinecraftTextWithShadow('MATH CRAFT', width / 2, height / 2 - 120, 72, color(255, 255, 100), 4);
 
-    drawMinecraftText('Mine your multiplication skills!', width / 2, height / 2 - 30, 28, color(255, 255, 255));
+    drawMinecraftTextWithShadow('MINE YOUR MULTIPLICATION SKILLS', width / 2, height / 2 - 30, 28, color(255, 255, 255));
 
-    drawMinecraftText('Press SPACE to start', width / 2, height / 2 + 60, 32, color(100, 255, 100));
+    drawMinecraftTextWithShadow('PRESS SPACE OR TAP TO START', width / 2, height / 2 + 60, 32, color(100, 255, 100));
 
     // Instructions
-    drawMinecraftText('Defend against the Creeper with correct answers!', width / 2, height / 2 + 130, 18, color(200, 200, 200));
-    drawMinecraftText('Type your answer - it auto-submits!', width / 2, height / 2 + 160, 18, color(200, 200, 200));
-    drawMinecraftText('Use BACKSPACE to correct mistakes', width / 2, height / 2 + 190, 18, color(200, 200, 200));
+    drawMinecraftTextWithShadow('DEFEND AGAINST THE CREEPER WITH CORRECT ANSWERS', width / 2, height / 2 + 130, 18, color(200, 200, 200));
+    drawMinecraftTextWithShadow('TYPE YOUR ANSWER - IT AUTO SUBMITS', width / 2, height / 2 + 160, 18, color(200, 200, 200));
+    drawMinecraftTextWithShadow('USE BACKSPACE TO CORRECT MISTAKES', width / 2, height / 2 + 190, 18, color(200, 200, 200));
+
+    // Debug hint
+    fill(100, 100, 100);
+    textAlign(RIGHT, BOTTOM);
+    textSize(12);
+    text('Press D for sprite debug', width - 20, height - 20);
 }
 
-// ===== MINECRAFT-STYLE TEXT =====
+// ===== MINECRAFT-STYLE TEXT (SPRITE-BASED) =====
 function drawMinecraftText(txt, x, y, size, col) {
-    // Add black shadow/outline for Minecraft look
-    fill(0);
-    textSize(size);
-    textStyle(BOLD);
-    text(txt, x + 3, y + 3);
+    if (!spriteSheet || Object.keys(charImages).length === 0) {
+        // Fallback to regular text if sprites aren't loaded
+        fill(0);
+        textSize(size);
+        textStyle(BOLD);
+        text(txt, x + 3, y + 3);
+        fill(col);
+        text(txt, x, y);
+        return;
+    }
 
-    // Main text
-    fill(col);
-    text(txt, x, y);
+    // Convert text to uppercase for sprite matching
+    txt = txt.toUpperCase();
+
+    // Calculate spacing based on target size
+    let avgCharHeight = 100; // Average height from our character data
+    let scale = (size / avgCharHeight) * 1.5; // Make sprites 50% larger
+    let baseSpacing = size * 0.8; // Base spacing between characters
+    let charSpacing = 10; // Fixed 10px spacing between characters
+
+    // Calculate total width for centering (approximate)
+    let totalWidth = 0;
+
+    for (let i = 0; i < txt.length; i++) {
+        let c = txt[i];
+        if (c === ' ') {
+            totalWidth += baseSpacing * 0.5; // Space width
+        } else {
+            let charIndex = chars.indexOf(c);
+            if (charIndex >= 0 && charIndex < charPositions.length) {
+                totalWidth += charPositions[charIndex].w * scale + charSpacing;
+            } else {
+                totalWidth += baseSpacing + charSpacing; // Fallback width
+            }
+        }
+    }
+    // Remove the last spacing since there's no character after the last one
+    if (txt.length > 0) totalWidth -= charSpacing;
+
+    let startX = x - totalWidth / 2;
+    let currentX = startX;
+
+    push();
+    // Apply tint for coloring
+    tint(col);
+
+    // Draw each character
+    for (let i = 0; i < txt.length; i++) {
+        let c = txt[i];
+
+        if (c === ' ') {
+            // Skip spaces but advance position
+            currentX += baseSpacing * 0.5;
+            continue;
+        }
+
+        let img = charImages[c];
+        if (img) {
+            let charIndex = chars.indexOf(c);
+            if (charIndex >= 0 && charIndex < charPositions.length) {
+                let pos = charPositions[charIndex];
+                let charWidth = pos.w * scale;
+                let charHeight = pos.h * scale;
+
+                // Center character vertically
+                let charY = y - (charHeight / 2);
+                image(img, currentX, charY, charWidth, charHeight);
+
+                // Advance position with 5px spacing
+                currentX += charWidth + charSpacing;
+            } else {
+                // Fallback for characters without precise positions
+                let charWidth = baseSpacing;
+                let charY = y - (charWidth / 2);
+                image(img, currentX, charY, charWidth, charWidth);
+                currentX += charWidth + charSpacing;
+            }
+        }
+    }
+
+    noTint(); // Reset tint
+    pop();
+}
+
+// ===== SPRITE TEXT WITH SHADOW =====
+function drawMinecraftTextWithShadow(txt, x, y, size, col, shadowOffset = 3) {
+    // Draw shadow first (black)
+    drawMinecraftText(txt, x + shadowOffset, y + shadowOffset, size, color(0, 0, 0, 150));
+    // Draw main text
+    drawMinecraftText(txt, x, y, size, col);
 }
 
 // ===== GAME OVER SCREEN =====
 function drawGameOverScreen() {
-    drawMinecraftText('GAME OVER', width / 2, height / 2 - 100, 72, color(255, 100, 100));
-    drawMinecraftText('You were destroyed!', width / 2, height / 2 - 30, 32, color(255, 150, 150));
+    drawMinecraftTextWithShadow('GAME OVER', width / 2, height / 2 - 100, 72, color(255, 100, 100), 4);
+    drawMinecraftTextWithShadow('YOU WERE DESTROYED', width / 2, height / 2 - 30, 32, color(255, 150, 150));
 
-    drawMinecraftText(`Final Score: ${score}`, width / 2, height / 2 + 30, 48, color(255, 255, 100));
+    drawMinecraftTextWithShadow(`FINAL SCORE ${score}`, width / 2, height / 2 + 30, 48, color(255, 255, 100));
 
-    drawMinecraftText('Press SPACE to respawn', width / 2, height / 2 + 100, 28, color(100, 255, 100));
+    drawMinecraftTextWithShadow('PRESS SPACE OR TAP TO RESPAWN', width / 2, height / 2 + 100, 28, color(100, 255, 100));
+}
+
+// ===== DEBUG SCREEN =====
+function drawDebugScreen() {
+    // Clear background to black for better visibility
+    background(0);
+
+    // Title
+    fill(255, 255, 0);
+    textSize(20);
+    textAlign(CENTER, TOP);
+    if (calibrationMode) {
+        text(`CALIBRATION MODE - Character: ${chars[currentCharIndex]} (${currentCharIndex + 1}/${chars.length})`, width / 2, 10);
+        text(waitingForTopLeft ? 'Click TOP-LEFT corner of character' : 'Click BOTTOM-RIGHT corner of character', width / 2, 35);
+    } else {
+        text('SPRITE SHEET DEBUG - Press D to exit, C to calibrate', width / 2, 20);
+    }
+
+    if (!spriteSheet) {
+        fill(255, 0, 0);
+        textAlign(CENTER, CENTER);
+        text('SPRITE SHEET NOT LOADED!', width / 2, height / 2);
+        return;
+    }
+
+    // Calculate display size and position (store globally for mouse handling)
+    displayScale = 2;
+    let spriteDisplayWidth = spriteSheet.width * displayScale;
+    let spriteDisplayHeight = spriteSheet.height * displayScale;
+    spriteX = (width - spriteDisplayWidth) / 2;
+    spriteY = calibrationMode ? 80 : 100;
+
+    // Draw the sprite sheet
+    push();
+    noSmooth();
+    image(spriteSheet, spriteX, spriteY, spriteDisplayWidth, spriteDisplayHeight);
+    pop();
+
+    if (calibrationMode) {
+        drawCalibrationInterface();
+    } else {
+        drawGridDebugInfo();
+    }
+
+    // Display sprite sheet info
+    fill(255);
+    textAlign(LEFT, TOP);
+    textSize(12);
+    let infoY = calibrationMode ? height - 120 : 60;
+    text(`Sprite Sheet: ${spriteSheet.width} x ${spriteSheet.height}`, 20, infoY);
+    text(`Precise Positions: ${charPositions.length} defined`, 20, infoY + 15);
+    text(`Characters: ${chars}`, 20, infoY + 30);
+
+    if (!calibrationMode) {
+        text(`Loaded Characters: ${Object.keys(charImages).length}`, 20, infoY + 45);
+        text(`Using: Precise pixel positions (green) / Grid fallback (red)`, 20, infoY + 60);
+
+        // Show sample position data
+        if (charPositions.length > 0) {
+            fill(0, 255, 0);
+            text(`Sample 'A': x=${charPositions[0].x}, y=${charPositions[0].y}, w=${charPositions[0].w}, h=${charPositions[0].h}`, 20, infoY + 75);
+        }
+
+        // Test text rendering at bottom
+        textAlign(CENTER, BOTTOM);
+        textSize(16);
+        fill(255, 255, 255);
+        text('Test text with precise sprites:', width / 2, height - 60);        // Test sprite rendering
+        if (Object.keys(charImages).length > 0) {
+            drawMinecraftText('HELLO123', width / 2, height - 30, 32, color(255, 255, 255));
+        }
+    }
+}
+
+// ===== CALIBRATION INTERFACE =====
+function drawCalibrationInterface() {
+    // Highlight current character area
+    if (currentCharIndex < chars.length) {
+        let currentChar = chars[currentCharIndex];
+
+        // Draw highlighting for current character
+        stroke(0, 255, 0);
+        strokeWeight(3);
+        noFill();
+
+        // If we already have some positions defined, show them
+        if (charPositions[currentCharIndex]) {
+            let pos = charPositions[currentCharIndex];
+            if (pos.x1 !== undefined && pos.y1 !== undefined) {
+                // Draw top-left marker
+                fill(0, 255, 0, 100);
+                ellipse(spriteX + pos.x1 * displayScale, spriteY + pos.y1 * displayScale, 10, 10);
+
+                if (pos.x2 !== undefined && pos.y2 !== undefined) {
+                    // Draw bottom-right marker and rectangle
+                    ellipse(spriteX + pos.x2 * displayScale, spriteY + pos.y2 * displayScale, 10, 10);
+
+                    noFill();
+                    stroke(0, 255, 0);
+                    strokeWeight(2);
+                    rect(spriteX + pos.x1 * displayScale, spriteY + pos.y1 * displayScale,
+                        (pos.x2 - pos.x1) * displayScale, (pos.y2 - pos.y1) * displayScale);
+                }
+            }
+        }
+
+        // Show temp top-left if we're waiting for bottom-right
+        if (tempTopLeft && !waitingForTopLeft) {
+            fill(255, 255, 0, 150);
+            noStroke();
+            ellipse(spriteX + tempTopLeft.x * displayScale, spriteY + tempTopLeft.y * displayScale, 8, 8);
+        }
+
+        // Instructions
+        fill(255, 255, 255);
+        textAlign(LEFT, TOP);
+        textSize(14);
+        text(`Character: '${currentChar}'`, 20, height - 80);
+        text(`Progress: ${currentCharIndex}/${chars.length}`, 20, height - 60);
+        text(`Press R to reset, F to finish and copy to clipboard`, 20, height - 40);
+        text(`Press N to skip character, P to go back`, 20, height - 20);
+    } else {
+        // Calibration complete
+        fill(0, 255, 0);
+        textAlign(CENTER, CENTER);
+        textSize(24);
+        text('CALIBRATION COMPLETE!', width / 2, height / 2);
+        text('Press F to copy positions to clipboard', width / 2, height / 2 + 40);
+    }
+}
+
+// ===== GRID DEBUG INFO =====
+function drawGridDebugInfo() {
+    // Draw precise character rectangles and labels
+    stroke(0, 255, 0); // Green for precise positions
+    strokeWeight(2);
+    fill(255, 255, 0);
+    textAlign(CENTER, CENTER);
+    textSize(12);
+
+    for (let i = 0; i < chars.length; i++) {
+        if (i < charPositions.length) {
+            let pos = charPositions[i];
+
+            // Scale positions for display
+            let displayX = spriteX + pos.x * displayScale;
+            let displayY = spriteY + pos.y * displayScale;
+            let displayW = pos.w * displayScale;
+            let displayH = pos.h * displayScale;
+
+            // Draw precise rectangle
+            noFill();
+            rect(displayX, displayY, displayW, displayH);
+
+            // Draw character label above
+            fill(255, 255, 0);
+            text(chars[i], displayX + displayW / 2, displayY - 15);
+
+            // Draw position info below
+            fill(0, 255, 255);
+            textSize(8);
+            text(`${pos.x},${pos.y}`, displayX + displayW / 2, displayY + displayH + 10);
+            text(`${pos.w}x${pos.h}`, displayX + displayW / 2, displayY + displayH + 22);
+        } else {
+            // Fallback to old grid method for missing positions
+            let gridX = i % 9;
+            let gridY = floor(i / 9);
+            let x = gridX * tileSize;
+            let y = gridY * tileSize;
+
+            let displayX = spriteX + x * displayScale;
+            let displayY = spriteY + y * displayScale;
+            let displayTileSize = tileSize * displayScale;
+
+            // Draw old grid rectangle in red
+            stroke(255, 0, 0);
+            strokeWeight(1);
+            noFill();
+            rect(displayX, displayY, displayTileSize, displayTileSize);
+
+            fill(255, 100, 100);
+            textSize(10);
+            text(chars[i], displayX + displayTileSize / 2, displayY - 10);
+
+            fill(255, 0, 0);
+            textSize(8);
+            text(`${x},${y} (grid)`, displayX + displayTileSize / 2, displayY + displayTileSize + 15);
+        }
+    }
 }
 
 // ===== MAIN GAME DRAWING =====
@@ -240,11 +582,12 @@ function drawGame() {
 // ===== HUD (SCORE & LIVES) =====
 function drawHUD() {
     // Score display with Minecraft style
+    push();
     textAlign(LEFT, TOP);
-    drawMinecraftText(`Score: ${score}`, 40, 40, 32, color(255, 255, 100));
+    drawMinecraftTextWithShadow(`SCORE ${score}`, 140, 55, 32, color(255, 255, 100));
+    pop();
 
     // Lives display with hearts (Minecraft style)
-    textAlign(LEFT, TOP);
     let heartX = width - 280;
     let heartY = 40;
 
@@ -295,10 +638,21 @@ function drawMinecraftHeart(x, y, filled) {
 
 // ===== EQUATION DISPLAY =====
 function drawEquation() {
+    push();
     textAlign(CENTER, CENTER);
 
+    // Use normal font for equation (easier to read)
     let equation = `${currentEquation.num1} × ${currentEquation.num2} =`;
-    drawMinecraftText(equation, width / 2, height / 2 - 80, 64, color(255, 255, 255));
+
+    // Draw shadow first
+    fill(0, 0, 0, 150);
+    textSize(64);
+    textStyle(BOLD);
+    text(equation, width / 2 + 3, height / 2 - 80 + 3);
+
+    // Draw main equation text
+    fill(255, 255, 255);
+    text(equation, width / 2, height / 2 - 80);
 
     // User input with stone panel background
     let inputBoxWidth = 200;
@@ -306,7 +660,16 @@ function drawEquation() {
     drawStonePanel(width / 2 - inputBoxWidth / 2, height / 2 - 20, inputBoxWidth, inputBoxHeight);
 
     let displayInput = userInput || '_';
-    drawMinecraftText(displayInput, width / 2, height / 2 + 30, 72, color(255, 255, 100));
+
+    // Use normal font for user input too (easier to read)
+    fill(0, 0, 0, 150);
+    textSize(72);
+    text(displayInput, width / 2 + 3, height / 2 + 30 + 3);
+
+    fill(255, 255, 100);
+    text(displayInput, width / 2, height / 2 + 30);
+
+    pop();
 }
 
 // ===== FEEDBACK DISPLAY =====
@@ -314,6 +677,7 @@ function drawFeedback() {
     // Draw HUD (still visible during feedback)
     drawHUD();
 
+    push();
     textAlign(CENTER, CENTER);
 
     // Color based on correct/incorrect
@@ -328,14 +692,32 @@ function drawFeedback() {
         drawExplosion();
     }
 
+    // Use normal font for equation (easier to read)
     let equation = `${currentEquation.num1} × ${currentEquation.num2} =`;
-    drawMinecraftText(equation, width / 2, height / 2 - 80, 64, textColor);
+
+    // Draw shadow first
+    fill(0, 0, 0, 150);
+    textSize(64);
+    textStyle(BOLD);
+    text(equation, width / 2 + 3, height / 2 - 80 + 3);
+
+    // Draw main equation text
+    fill(textColor);
+    text(equation, width / 2, height / 2 - 80);
 
     // Show the answer in stone panel
     let inputBoxWidth = 200;
     let inputBoxHeight = 100;
     drawStonePanel(width / 2 - inputBoxWidth / 2, height / 2 - 20, inputBoxWidth, inputBoxHeight);
-    drawMinecraftText(currentEquation.answer.toString(), width / 2, height / 2 + 30, 72, textColor);
+
+    // Use normal font for answer too
+    fill(0, 0, 0, 150);
+    textSize(72);
+    text(currentEquation.answer.toString(), width / 2 + 3, height / 2 + 30 + 3);
+
+    fill(textColor);
+    text(currentEquation.answer.toString(), width / 2, height / 2 + 30);
+    pop();
 }
 
 // ===== ARROW HIT ANIMATION =====
@@ -409,7 +791,7 @@ function drawTimerBar() {
         push();
         textAlign(CENTER, CENTER);
         let flashAlpha = (sin(frameCount * 0.3) + 1) * 127;
-        drawMinecraftText('CREEPER APPROACHING!', width / 2, barY - 60, 24, color(255, 50, 50, flashAlpha));
+        drawMinecraftTextWithShadow('CREEPER APPROACHING', width / 2, barY - 60, 24, color(255, 50, 50, flashAlpha));
         pop();
     }
 }
@@ -573,6 +955,64 @@ function loseLife() {
 
 // ===== KEYBOARD INPUT =====
 function keyPressed() {
+    // Debug toggle (D key)
+    if (key === 'd' || key === 'D') {
+        if (gameState === 'debug') {
+            gameState = 'waiting'; // Return to waiting screen
+            calibrationMode = false; // Exit calibration mode
+        } else {
+            gameState = 'debug'; // Enter debug mode
+        }
+        return;
+    }
+
+    // Calibration controls (only in debug mode)
+    if (gameState === 'debug') {
+        if (key === 'c' || key === 'C') {
+            // Start calibration mode
+            calibrationMode = true;
+            currentCharIndex = 0;
+            waitingForTopLeft = true;
+            charPositions = [];
+            tempTopLeft = null;
+            return;
+        }
+
+        if (calibrationMode) {
+            if (key === 'r' || key === 'R') {
+                // Reset current character
+                if (currentCharIndex < charPositions.length) {
+                    charPositions[currentCharIndex] = {};
+                }
+                waitingForTopLeft = true;
+                tempTopLeft = null;
+                return;
+            }
+
+            if (key === 'n' || key === 'N') {
+                // Skip to next character
+                nextCharacter();
+                return;
+            }
+
+            if (key === 'p' || key === 'P') {
+                // Go back to previous character
+                if (currentCharIndex > 0) {
+                    currentCharIndex--;
+                    waitingForTopLeft = true;
+                    tempTopLeft = null;
+                }
+                return;
+            }
+
+            if (key === 'f' || key === 'F') {
+                // Finish and copy to clipboard
+                copyPositionsToClipboard();
+                return;
+            }
+        }
+    }
+
     if (key === ' ') {
         if (gameState === 'waiting' || gameState === 'gameOver') {
             startGame();
@@ -603,6 +1043,163 @@ function keyPressed() {
     // Skip feedback early with SPACE (optional feature)
     if (gameState === 'feedback' && key === ' ') {
         feedbackTimer = 0; // Skip to next question immediately
+    }
+}
+
+// ===== MOUSE INPUT =====
+function mousePressed() {
+    if (gameState === 'debug' && calibrationMode && spriteSheet) {
+        // Convert mouse position to sprite sheet coordinates
+        let relativeX = mouseX - spriteX;
+        let relativeY = mouseY - spriteY;
+
+        // Check if click is within sprite bounds
+        if (relativeX >= 0 && relativeY >= 0 &&
+            relativeX <= spriteSheet.width * displayScale &&
+            relativeY <= spriteSheet.height * displayScale) {
+
+            // Convert to sprite sheet pixel coordinates
+            let spritePixelX = Math.floor(relativeX / displayScale);
+            let spritePixelY = Math.floor(relativeY / displayScale);
+
+            if (waitingForTopLeft) {
+                // Store top-left position
+                tempTopLeft = { x: spritePixelX, y: spritePixelY };
+                waitingForTopLeft = false;
+            } else {
+                // Store bottom-right position and complete the character
+                if (tempTopLeft) {
+                    // Ensure we have a valid rectangle (bottom-right should be > top-left)
+                    let x1 = Math.min(tempTopLeft.x, spritePixelX);
+                    let y1 = Math.min(tempTopLeft.y, spritePixelY);
+                    let x2 = Math.max(tempTopLeft.x, spritePixelX);
+                    let y2 = Math.max(tempTopLeft.y, spritePixelY);
+
+                    // Store the character position
+                    if (!charPositions[currentCharIndex]) {
+                        charPositions[currentCharIndex] = {};
+                    }
+                    charPositions[currentCharIndex] = { x1, y1, x2, y2 };
+
+                    // Move to next character
+                    nextCharacter();
+                }
+            }
+        }
+    }
+}
+
+// ===== TOUCH INPUT (TABLET SUPPORT) =====
+function touchStarted() {
+    // Handle touch for starting the game (same as spacebar)
+    if (gameState === 'waiting' || gameState === 'gameOver') {
+        startGame();
+        return false; // Prevent default touch behavior
+    }
+
+    // Handle touch for debug mode calibration
+    if (gameState === 'debug' && calibrationMode && spriteSheet) {
+        // Use touch coordinates instead of mouse coordinates
+        let touchX = touches.length > 0 ? touches[0].x : touchX;
+        let touchY = touches.length > 0 ? touches[0].y : touchY;
+
+        // Convert touch position to sprite sheet coordinates
+        let relativeX = touchX - spriteX;
+        let relativeY = touchY - spriteY;
+
+        // Check if touch is within sprite bounds
+        if (relativeX >= 0 && relativeY >= 0 &&
+            relativeX <= spriteSheet.width * displayScale &&
+            relativeY <= spriteSheet.height * displayScale) {
+
+            // Convert to sprite sheet pixel coordinates
+            let spritePixelX = Math.floor(relativeX / displayScale);
+            let spritePixelY = Math.floor(relativeY / displayScale);
+
+            if (waitingForTopLeft) {
+                // Store top-left position
+                tempTopLeft = { x: spritePixelX, y: spritePixelY };
+                waitingForTopLeft = false;
+            } else {
+                // Store bottom-right position and complete the character
+                if (tempTopLeft) {
+                    // Ensure we have a valid rectangle
+                    let x1 = Math.min(tempTopLeft.x, spritePixelX);
+                    let y1 = Math.min(tempTopLeft.y, spritePixelY);
+                    let x2 = Math.max(tempTopLeft.x, spritePixelX);
+                    let y2 = Math.max(tempTopLeft.y, spritePixelY);
+
+                    // Store the character position
+                    if (!charPositions[currentCharIndex]) {
+                        charPositions[currentCharIndex] = {};
+                    }
+                    charPositions[currentCharIndex] = { x1, y1, x2, y2 };
+
+                    // Move to next character
+                    nextCharacter();
+                }
+            }
+        }
+        return false; // Prevent default touch behavior
+    }
+
+    // Skip feedback early with touch (same as spacebar)
+    if (gameState === 'feedback') {
+        feedbackTimer = 0;
+        return false; // Prevent default touch behavior
+    }
+
+    // Prevent default touch behavior to avoid scrolling, etc.
+    return false;
+}
+
+// ===== CALIBRATION HELPERS =====
+function nextCharacter() {
+    currentCharIndex++;
+    waitingForTopLeft = true;
+    tempTopLeft = null;
+
+    // Skip to next if we've done all characters
+    if (currentCharIndex >= chars.length) {
+        // Calibration complete - could auto-copy here
+        console.log('Calibration complete!');
+    }
+}
+
+function copyPositionsToClipboard() {
+    // Create the array in the format needed for the code
+    let positionsArray = "let charPositions = [";
+
+    for (let i = 0; i < chars.length; i++) {
+        if (i > 0) positionsArray += ",";
+        positionsArray += "\n  ";
+
+        if (charPositions[i] && charPositions[i].x1 !== undefined) {
+            let pos = charPositions[i];
+            positionsArray += `{ char: '${chars[i]}', x: ${pos.x1}, y: ${pos.y1}, w: ${pos.x2 - pos.x1}, h: ${pos.y2 - pos.y1} }`;
+        } else {
+            // Missing position - use placeholder
+            positionsArray += `{ char: '${chars[i]}', x: 0, y: 0, w: 32, h: 32 } // TODO: Define position`;
+        }
+    }
+
+    positionsArray += "\n];";
+
+    // Copy to clipboard using modern API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(positionsArray).then(() => {
+            console.log('Character positions copied to clipboard!');
+            alert('Character positions copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy to clipboard:', err);
+            console.log('Positions array:', positionsArray);
+            alert('Failed to copy to clipboard. Check console for output.');
+        });
+    } else {
+        // Fallback - just log to console
+        console.log('Clipboard not available. Here are the positions:');
+        console.log(positionsArray);
+        alert('Clipboard not available. Check console for character positions.');
     }
 }
 
