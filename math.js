@@ -17,6 +17,16 @@ let successOsc, failOsc;
 let envelope;
 let audioReady = false;
 
+// ===== DEVICE DETECTION =====
+let isMobile = false;
+let isTouch = false;
+let deviceType = 'desktop';
+
+// ===== MOBILE ANSWER BUTTONS =====
+let answerButtons = [];
+let buttonHeight = 80; // Height for each button
+let buttonBorder = 40; // Border margin from window edges
+
 // ===== MINECRAFT FONT =====
 let spriteSheet;
 let tileSize = 64;
@@ -69,12 +79,60 @@ let tempTopLeft = null;
 let displayScale = 2;
 let spriteX, spriteY;
 
+// ===== DEVICE DETECTION =====
+function detectDevice() {
+    // Method 1: User Agent Detection
+    const userAgent = navigator.userAgent.toLowerCase();
+    const mobileKeywords = [
+        'android', 'webos', 'iphone', 'ipad', 'ipod',
+        'blackberry', 'windows phone', 'mobile', 'tablet'
+    ];
+
+    let isMobileUA = mobileKeywords.some(keyword => userAgent.includes(keyword));
+
+    // Method 2: Touch Capability Detection
+    isTouch = ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        (navigator.msMaxTouchPoints > 0);
+
+    // Method 3: Screen Size Detection
+    let isSmallScreen = (window.innerWidth <= 768) || (window.innerHeight <= 768);
+
+    // Method 4: CSS Media Query Detection
+    let isMobileMedia = window.matchMedia("(pointer: coarse)").matches;
+
+    // Combine methods for reliable detection
+    isMobile = isMobileUA || (isTouch && isSmallScreen) || isMobileMedia;
+
+    // Determine device type
+    if (userAgent.includes('ipad') || (isTouch && window.innerWidth >= 768)) {
+        deviceType = 'tablet';
+    } else if (isMobile) {
+        deviceType = 'mobile';
+    } else {
+        deviceType = 'desktop';
+    }
+
+    // Log detection results (can be removed in production)
+    console.log('Device Detection:');
+    console.log('- User Agent Mobile:', isMobileUA);
+    console.log('- Touch Capable:', isTouch);
+    console.log('- Small Screen:', isSmallScreen);
+    console.log('- Mobile Media Query:', isMobileMedia);
+    console.log('- Final Result - Mobile:', isMobile);
+    console.log('- Device Type:', deviceType);
+    console.log('- Screen Size:', window.innerWidth + 'x' + window.innerHeight);
+}
+
 // ===== SETUP =====
 function setup() {
     createCanvas(windowWidth, windowHeight);
     textAlign(CENTER, CENTER);
     lastFrameTime = millis();
     noSmooth(); // Keep pixelated look
+
+    // Detect device type
+    detectDevice();
 
     // Prepare each character as a cropped image using precise positions
     if (spriteSheet) {
@@ -260,18 +318,37 @@ function drawWaitingScreen() {
 
     drawMinecraftTextWithShadow('MINE YOUR MULTIPLICATION SKILLS', width / 2, height / 2 - 30, 28, color(255, 255, 255));
 
-    drawMinecraftTextWithShadow('PRESS SPACE OR TAP TO START', width / 2, height / 2 + 60, 32, color(100, 255, 100));
+    // Device-specific start instruction
+    if (isMobile || isTouch) {
+        drawMinecraftTextWithShadow('TAP TO START', width / 2, height / 2 + 60, 32, color(100, 255, 100));
+    } else {
+        drawMinecraftTextWithShadow('PRESS SPACE TO START', width / 2, height / 2 + 60, 32, color(100, 255, 100));
+    }
 
     // Instructions
     drawMinecraftTextWithShadow('DEFEND AGAINST THE CREEPER WITH CORRECT ANSWERS', width / 2, height / 2 + 130, 18, color(200, 200, 200));
-    drawMinecraftTextWithShadow('TYPE YOUR ANSWER - IT AUTO SUBMITS', width / 2, height / 2 + 160, 18, color(200, 200, 200));
-    drawMinecraftTextWithShadow('USE BACKSPACE TO CORRECT MISTAKES', width / 2, height / 2 + 190, 18, color(200, 200, 200));
 
-    // Debug hint
+    // Device-specific input instructions
+    if (isMobile || isTouch) {
+        drawMinecraftTextWithShadow('TAP THE CORRECT ANSWER BUTTON', width / 2, height / 2 + 160, 18, color(200, 200, 200));
+    } else {
+        drawMinecraftTextWithShadow('TYPE YOUR ANSWER - IT AUTO SUBMITS', width / 2, height / 2 + 160, 18, color(200, 200, 200));
+        drawMinecraftTextWithShadow('USE BACKSPACE TO CORRECT MISTAKES', width / 2, height / 2 + 190, 18, color(200, 200, 200));
+    }
+
+    // Debug hint (only show on non-mobile)
+    if (!isMobile) {
+        fill(100, 100, 100);
+        textAlign(RIGHT, BOTTOM);
+        textSize(12);
+        text('Press D for sprite debug', width - 20, height - 20);
+    }
+
+    // Device info (can be removed in production)
     fill(100, 100, 100);
-    textAlign(RIGHT, BOTTOM);
-    textSize(12);
-    text('Press D for sprite debug', width - 20, height - 20);
+    textAlign(LEFT, BOTTOM);
+    textSize(10);
+    text(`Device: ${deviceType} | Touch: ${isTouch}`, 20, height - 10);
 }
 
 // ===== MINECRAFT-STYLE TEXT (SPRITE-BASED) =====
@@ -370,12 +447,17 @@ function drawMinecraftTextWithShadow(txt, x, y, size, col, shadowOffset = 3) {
 
 // ===== GAME OVER SCREEN =====
 function drawGameOverScreen() {
-    drawMinecraftTextWithShadow('GAME OVER', width / 2, height / 2 - 100, 72, color(255, 100, 100), 4);
-    drawMinecraftTextWithShadow('YOU WERE DESTROYED', width / 2, height / 2 - 30, 32, color(255, 150, 150));
+    drawMinecraftTextWithShadow('GAME OVER', width / 2, height / 2 - 120, 72, color(255, 100, 100), 4);
+    drawMinecraftTextWithShadow('YOU WERE DESTROYED', width / 2, height / 2 - 40, 32, color(255, 150, 150));
 
-    drawMinecraftTextWithShadow(`FINAL SCORE ${score}`, width / 2, height / 2 + 30, 48, color(255, 255, 100));
+    drawMinecraftTextWithShadow(`FINAL SCORE ${score}`, width / 2, height / 2 + 20, 48, color(255, 255, 100));
 
-    drawMinecraftTextWithShadow('PRESS SPACE OR TAP TO RESPAWN', width / 2, height / 2 + 100, 28, color(100, 255, 100));
+    // Device-specific restart instruction
+    if (isMobile || isTouch) {
+        drawMinecraftTextWithShadow('TAP TO RESPAWN', width / 2, height / 2 + 90, 28, color(100, 255, 100));
+    } else {
+        drawMinecraftTextWithShadow('PRESS SPACE TO RESPAWN', width / 2, height / 2 + 90, 28, color(100, 255, 100));
+    }
 }
 
 // ===== DEBUG SCREEN =====
@@ -581,10 +663,10 @@ function drawGame() {
 
 // ===== HUD (SCORE & LIVES) =====
 function drawHUD() {
-    // Score display with Minecraft style
+    // Score display with Minecraft style (moved 10px to the right)
     push();
     textAlign(LEFT, TOP);
-    drawMinecraftTextWithShadow(`SCORE ${score}`, 140, 55, 32, color(255, 255, 100));
+    drawMinecraftTextWithShadow(`SCORE ${score}`, 150, 55, 32, color(255, 255, 100));
     pop();
 
     // Lives display with hearts (Minecraft style)
@@ -654,22 +736,53 @@ function drawEquation() {
     fill(255, 255, 255);
     text(equation, width / 2, height / 2 - 80);
 
-    // User input with stone panel background
-    let inputBoxWidth = 200;
-    let inputBoxHeight = 100;
-    drawStonePanel(width / 2 - inputBoxWidth / 2, height / 2 - 20, inputBoxWidth, inputBoxHeight);
+    if (isMobile || isTouch) {
+        // Show answer buttons for mobile
+        drawAnswerButtons();
+    } else {
+        // Show traditional input box for desktop
+        let inputBoxWidth = 200;
+        let inputBoxHeight = 100;
+        drawStonePanel(width / 2 - inputBoxWidth / 2, height / 2 - 20, inputBoxWidth, inputBoxHeight);
 
-    let displayInput = userInput || '_';
+        let displayInput = userInput || '_';
 
-    // Use normal font for user input too (easier to read)
-    fill(0, 0, 0, 150);
-    textSize(72);
-    text(displayInput, width / 2 + 3, height / 2 + 30 + 3);
+        // Use normal font for user input too (easier to read)
+        fill(0, 0, 0, 150);
+        textSize(72);
+        text(displayInput, width / 2 + 3, height / 2 + 30 + 3);
 
-    fill(255, 255, 100);
-    text(displayInput, width / 2, height / 2 + 30);
+        fill(255, 255, 100);
+        text(displayInput, width / 2, height / 2 + 30);
+    }
 
     pop();
+}
+
+// ===== DRAW ANSWER BUTTONS (MOBILE) =====
+function drawAnswerButtons() {
+    for (let button of answerButtons) {
+        push();
+
+        // Button background (stone panel style)
+        drawStonePanel(button.x, button.y, button.width, button.height);
+
+        // Button text (larger for taller buttons)
+        fill(255, 255, 255);
+        textAlign(CENTER, CENTER);
+        textSize(48); // Increased from 32 to 48 for better visibility
+        textStyle(BOLD);
+
+        // Shadow
+        fill(0, 0, 0, 150);
+        text(button.value, button.x + button.width / 2 + 3, button.y + button.height / 2 + 3);
+
+        // Main text
+        fill(255, 255, 255);
+        text(button.value, button.x + button.width / 2, button.y + button.height / 2);
+
+        pop();
+    }
 }
 
 // ===== FEEDBACK DISPLAY =====
@@ -705,21 +818,59 @@ function drawFeedback() {
     fill(textColor);
     text(equation, width / 2, height / 2 - 80);
 
-    // Show the answer in stone panel
-    let inputBoxWidth = 200;
-    let inputBoxHeight = 100;
-    drawStonePanel(width / 2 - inputBoxWidth / 2, height / 2 - 20, inputBoxWidth, inputBoxHeight);
+    if (isMobile || isTouch) {
+        // Show answer buttons with correct answer highlighted
+        drawFeedbackButtons(textColor);
+    } else {
+        // Show the answer in stone panel (desktop)
+        let inputBoxWidth = 200;
+        let inputBoxHeight = 100;
+        drawStonePanel(width / 2 - inputBoxWidth / 2, height / 2 - 20, inputBoxWidth, inputBoxHeight);
 
-    // Use normal font for answer too
-    fill(0, 0, 0, 150);
-    textSize(72);
-    text(currentEquation.answer.toString(), width / 2 + 3, height / 2 + 30 + 3);
+        // Use normal font for answer too
+        fill(0, 0, 0, 150);
+        textSize(72);
+        text(currentEquation.answer.toString(), width / 2 + 3, height / 2 + 30 + 3);
 
-    fill(textColor);
-    text(currentEquation.answer.toString(), width / 2, height / 2 + 30);
+        fill(textColor);
+        text(currentEquation.answer.toString(), width / 2, height / 2 + 30);
+    }
     pop();
 }
 
+// ===== DRAW FEEDBACK BUTTONS (MOBILE) =====
+function drawFeedbackButtons(highlightColor) {
+    for (let button of answerButtons) {
+        push();
+
+        // Button background (stone panel style)
+        drawStonePanel(button.x, button.y, button.width, button.height);
+
+        // Highlight correct answer with border
+        if (button.isCorrect) {
+            stroke(highlightColor);
+            strokeWeight(6); // Increased stroke weight for larger buttons
+            noFill();
+            rect(button.x - 3, button.y - 3, button.width + 6, button.height + 6);
+        }
+
+        // Button text (larger for taller buttons)
+        fill(255, 255, 255);
+        textAlign(CENTER, CENTER);
+        textSize(48); // Increased from 32 to 48 for consistency
+        textStyle(BOLD);
+
+        // Shadow
+        fill(0, 0, 0, 150);
+        text(button.value, button.x + button.width / 2 + 3, button.y + button.height / 2 + 3);
+
+        // Main text
+        fill(255, 255, 255);
+        text(button.value, button.x + button.width / 2, button.y + button.height / 2);
+
+        pop();
+    }
+}
 // ===== ARROW HIT ANIMATION =====
 function drawArrowHit() {
     // Simple arrow graphic
@@ -893,6 +1044,11 @@ function generateNewEquation() {
 
     userInput = '';
 
+    // Generate answer buttons for mobile
+    if (isMobile || isTouch) {
+        generateAnswerButtons();
+    }
+
     // Calculate time limit based on score
     if (score < 20) {
         timeLimit = 7;
@@ -904,6 +1060,42 @@ function generateNewEquation() {
 
     timeRemaining = timeLimit;
     lastFrameTime = millis();
+}
+
+// ===== GENERATE ANSWER BUTTONS (MOBILE) =====
+function generateAnswerButtons() {
+    let correctAnswer = currentEquation.answer;
+    let options = [correctAnswer];
+
+    // Generate 3 wrong answers (±10 from correct answer)
+    while (options.length < 4) {
+        let wrongAnswer = correctAnswer + floor(random(-10, 11));
+
+        // Make sure it's positive and not already in the options
+        if (wrongAnswer > 0 && !options.includes(wrongAnswer)) {
+            options.push(wrongAnswer);
+        }
+    }
+
+    // Sort options by value
+    options.sort((a, b) => a - b);
+
+    // Create button objects spanning window width
+    answerButtons = [];
+    let buttonWidth = width - (buttonBorder * 2); // Full width minus borders
+    let totalHeight = buttonHeight * 4 + 15 * 3; // 4 buttons + 3 gaps of 15px
+    let startY = height - totalHeight - 30; // 30px from bottom
+
+    for (let i = 0; i < 4; i++) {
+        answerButtons.push({
+            value: options[i],
+            x: buttonBorder,
+            y: startY + i * (buttonHeight + 15), // 15px spacing between buttons
+            width: buttonWidth,
+            height: buttonHeight,
+            isCorrect: options[i] === correctAnswer
+        });
+    }
 }
 
 function checkAnswer() {
@@ -1048,6 +1240,25 @@ function keyPressed() {
 
 // ===== MOUSE INPUT =====
 function mousePressed() {
+    // Handle answer button clicks
+    if (gameState === 'playing' && (isMobile || isTouch) && answerButtons.length > 0) {
+        for (let button of answerButtons) {
+            if (mouseX >= button.x && mouseX <= button.x + button.width &&
+                mouseY >= button.y && mouseY <= button.y + button.height) {
+
+                // Button clicked - check if correct
+                if (button.isCorrect) {
+                    score++;
+                    showFeedback('correct');
+                } else {
+                    loseLife();
+                    showFeedback('incorrect');
+                }
+                return; // Exit early, don't process other clicks
+            }
+        }
+    }
+
     if (gameState === 'debug' && calibrationMode && spriteSheet) {
         // Convert mouse position to sprite sheet coordinates
         let relativeX = mouseX - spriteX;
@@ -1091,6 +1302,28 @@ function mousePressed() {
 
 // ===== TOUCH INPUT (TABLET SUPPORT) =====
 function touchStarted() {
+    // Handle answer button touches
+    if (gameState === 'playing' && (isMobile || isTouch) && answerButtons.length > 0) {
+        let touchX = touches.length > 0 ? touches[0].x : mouseX;
+        let touchY = touches.length > 0 ? touches[0].y : mouseY;
+
+        for (let button of answerButtons) {
+            if (touchX >= button.x && touchX <= button.x + button.width &&
+                touchY >= button.y && touchY <= button.y + button.height) {
+
+                // Button touched - check if correct
+                if (button.isCorrect) {
+                    score++;
+                    showFeedback('correct');
+                } else {
+                    loseLife();
+                    showFeedback('incorrect');
+                }
+                return false; // Prevent default and exit early
+            }
+        }
+    }
+
     // Handle touch for starting the game (same as spacebar)
     if (gameState === 'waiting' || gameState === 'gameOver') {
         startGame();
