@@ -24,7 +24,7 @@ let deviceType = 'desktop';
 
 // ===== MOBILE ANSWER BUTTONS =====
 let answerButtons = [];
-let buttonHeight = 120; // Height for each button
+let buttonHeight = 160; // Height for each button
 let buttonBorder = 40; // Border margin from window edges
 
 // ===== MINECRAFT FONT =====
@@ -666,7 +666,7 @@ function drawHUD() {
     // Score display with Minecraft style (moved 10px to the right)
     push();
     textAlign(LEFT, TOP);
-    drawMinecraftTextWithShadow(`SCORE ${score}`, 150, 55, 32, color(255, 255, 100));
+    drawMinecraftTextWithShadow(`SCORE ${score}`, 200, 55, 32, color(255, 255, 100));
     pop();
 
     // Lives display with hearts (Minecraft style)
