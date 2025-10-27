@@ -24,7 +24,7 @@ let deviceType = 'desktop';
 
 // ===== MOBILE ANSWER BUTTONS =====
 let answerButtons = [];
-let buttonHeight = 80; // Height for each button
+let buttonHeight = 120; // Height for each button
 let buttonBorder = 40; // Border margin from window edges
 
 // ===== MINECRAFT FONT =====
